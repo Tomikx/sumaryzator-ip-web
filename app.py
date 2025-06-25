@@ -2,6 +2,7 @@ import ipaddress
 import os
 from flask import Flask, request, render_template_string
 
+
 app = Flask(__name__)
 
 # Szablon HTML dla interfejsu użytkownika
