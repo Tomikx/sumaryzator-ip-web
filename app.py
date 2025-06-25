@@ -219,27 +219,27 @@ def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
 
     if aggressive_mode_enabled:
         # AGGRESSIVE SUMMARIZATION LOGIC
+        # Używamy common_network, która przyjmuje iterable.
+        # Dodajemy bloki try-except, aby obsłużyć potencjalne błędy,
+        # gdy common_network otrzyma nieoczekiwane dane.
         if parsed_networks_ipv4:
-            # Sort for consistency (not strictly required for common_network, but good practice)
-            # The common_network method works on iterable, but if you want to initialize from first element
-            # and then iterate from second, you need to handle single element list.
-            if len(parsed_networks_ipv4) == 1:
-                summarized_results.append(str(parsed_networks_ipv4[0]))
-            elif parsed_networks_ipv4: # Ensure it's not empty, though handled by len == 1
-                current_supernet_v4 = parsed_networks_ipv4[0]
-                for i in range(1, len(parsed_networks_ipv4)):
-                    current_supernet_v4 = ipaddress.common_network(current_supernet_v4, parsed_networks_ipv4[i])
-                summarized_results.append(str(current_supernet_v4))
+            try:
+                supernet_v4 = ipaddress.common_network(*parsed_networks_ipv4)
+                summarized_results.append(str(supernet_v4))
+            except ValueError as e:
+                errors.append(f"Błąd agresywnej sumaryzacji IPv4 (common_network): {e}. Upewnij się, że wszystkie adresy są prawidłowe i należą do tej samej wersji IP.")
+            except TypeError as e:
+                errors.append(f"Wewnętrzny błąd typu podczas agresywnej sumaryzacji IPv4: {e}")
+
 
         if parsed_networks_ipv6:
-            # Sort for consistency
-            if len(parsed_networks_ipv6) == 1:
-                summarized_results.append(str(parsed_networks_ipv6[0]))
-            elif parsed_networks_ipv6: # Ensure it's not empty
-                current_supernet_v6 = parsed_networks_ipv6[0]
-                for i in range(1, len(parsed_networks_ipv6)):
-                    current_supernet_v6 = ipaddress.common_network(current_supernet_v6, parsed_networks_ipv6[i])
-                summarized_results.append(str(current_supernet_v6))
+            try:
+                supernet_v6 = ipaddress.common_network(*parsed_networks_ipv6)
+                summarized_results.append(str(supernet_v6))
+            except ValueError as e:
+                errors.append(f"Błąd agresywnej sumaryzacji IPv6 (common_network): {e}. Upewnij się, że wszystkie adresy są prawidłowe i należą do tej samej wersji IP.")
+            except TypeError as e:
+                errors.append(f"Wewnętrzny błąd typu podczas agresywnej sumaryzacji IPv6: {e}")
 
     else:
         # STANDARD SUMMARIZATION LOGIC (using collapse_addresses)
