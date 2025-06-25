@@ -220,20 +220,26 @@ def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
     if aggressive_mode_enabled:
         # AGGRESSIVE SUMMARIZATION LOGIC
         if parsed_networks_ipv4:
-            # Sort for consistency before common_network (not strictly required for common_network, but good practice)
-            parsed_networks_ipv4.sort() 
-            current_supernet_v4 = parsed_networks_ipv4[0]
-            for i in range(1, len(parsed_networks_ipv4)):
-                current_supernet_v4 = ipaddress.common_network(current_supernet_v4, parsed_networks_ipv4[i])
-            summarized_results.append(str(current_supernet_v4))
+            # Sort for consistency (not strictly required for common_network, but good practice)
+            # The common_network method works on iterable, but if you want to initialize from first element
+            # and then iterate from second, you need to handle single element list.
+            if len(parsed_networks_ipv4) == 1:
+                summarized_results.append(str(parsed_networks_ipv4[0]))
+            elif parsed_networks_ipv4: # Ensure it's not empty, though handled by len == 1
+                current_supernet_v4 = parsed_networks_ipv4[0]
+                for i in range(1, len(parsed_networks_ipv4)):
+                    current_supernet_v4 = ipaddress.common_network(current_supernet_v4, parsed_networks_ipv4[i])
+                summarized_results.append(str(current_supernet_v4))
 
         if parsed_networks_ipv6:
             # Sort for consistency
-            parsed_networks_ipv6.sort()
-            current_supernet_v6 = parsed_networks_ipv6[0]
-            for i in range(1, len(parsed_networks_ipv6)):
-                current_supernet_v6 = ipaddress.common_network(current_supernet_v6, parsed_networks_ipv6[i])
-            summarized_results.append(str(current_supernet_v6))
+            if len(parsed_networks_ipv6) == 1:
+                summarized_results.append(str(parsed_networks_ipv6[0]))
+            elif parsed_networks_ipv6: # Ensure it's not empty
+                current_supernet_v6 = parsed_networks_ipv6[0]
+                for i in range(1, len(parsed_networks_ipv6)):
+                    current_supernet_v6 = ipaddress.common_network(current_supernet_v6, parsed_networks_ipv6[i])
+                summarized_results.append(str(current_supernet_v6))
 
     else:
         # STANDARD SUMMARIZATION LOGIC (using collapse_addresses)
@@ -248,6 +254,7 @@ def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
             summarized_results.extend([str(s) for s in collapsed_v6])
 
     # Sort final results for consistent display (e.g., IPv4 before IPv6, then by value)
+    # This also handles cases where one of the lists (IPv4/IPv6) was empty.
     summarized_results.sort(key=ipaddress.ip_network)
     
     return summarized_results, errors, warnings
