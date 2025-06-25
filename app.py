@@ -222,24 +222,31 @@ def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
         # Używamy common_network, która przyjmuje iterable.
         # Dodajemy bloki try-except, aby obsłużyć potencjalne błędy,
         # gdy common_network otrzyma nieoczekiwane dane.
-        if parsed_networks_ipv4:
-            try:
-                supernet_v4 = ipaddress.common_network(*parsed_networks_ipv4)
-                summarized_results.append(str(supernet_v4))
-            except ValueError as e:
-                errors.append(f"Błąd agresywnej sumaryzacji IPv4 (common_network): {e}. Upewnij się, że wszystkie adresy są prawidłowe i należą do tej samej wersji IP.")
-            except TypeError as e:
-                errors.append(f"Wewnętrzny błąd typu podczas agresywnej sumaryzacji IPv4: {e}")
+        try: # Dodatkowy, ogólny blok try-except dla całej agresywnej logiki
+            if parsed_networks_ipv4:
+                try:
+                    # common_network(*iterable) jest bezpieczne nawet dla listy z 1 elementem
+                    supernet_v4 = ipaddress.common_network(*parsed_networks_ipv4)
+                    summarized_results.append(str(supernet_v4))
+                except ValueError as e:
+                    errors.append(f"Błąd agresywnej sumaryzacji IPv4 (common_network): {e}. Upewnij się, że wszystkie adresy są prawidłowe i należą do tej samej wersji IP.")
+                except TypeError as e:
+                    errors.append(f"Wewnętrzny błąd typu podczas agresywnej sumaryzacji IPv4: {e}")
 
+            if parsed_networks_ipv6:
+                try:
+                    supernet_v6 = ipaddress.common_network(*parsed_networks_ipv6)
+                    summarized_results.append(str(supernet_v6))
+                except ValueError as e:
+                    errors.append(f"Błąd agresywnej sumaryzacji IPv6 (common_network): {e}. Upewnij się, że wszystkie adresy są prawidłowe i należą do tej samej wersji IP.")
+                except TypeError as e:
+                    errors.append(f"Wewnętrzny błąd typu podczas agresywnej sumaryzacji IPv6: {e}")
+        except Exception as e:
+            # Ostateczne wyłapanie wszelkich innych błędów w trybie agresywnym
+            errors.append(f"Nieoczekiwany błąd w trybie agresywnej sumaryzacji: {e}. Sprawdź logi serwera, jeśli aplikacja działa w trybie debugowania.")
+            if app.debug: # Dodałem ten warunek, aby logować tylko w trybie debugowania
+                print(f"DEBUG: Wystąpił nieoczekiwany błąd w trybie agresywnym: {e}")
 
-        if parsed_networks_ipv6:
-            try:
-                supernet_v6 = ipaddress.common_network(*parsed_networks_ipv6)
-                summarized_results.append(str(supernet_v6))
-            except ValueError as e:
-                errors.append(f"Błąd agresywnej sumaryzacji IPv6 (common_network): {e}. Upewnij się, że wszystkie adresy są prawidłowe i należą do tej samej wersji IP.")
-            except TypeError as e:
-                errors.append(f"Wewnętrzny błąd typu podczas agresywnej sumaryzacji IPv6: {e}")
 
     else:
         # STANDARD SUMMARIZATION LOGIC (using collapse_addresses)
