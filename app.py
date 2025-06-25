@@ -46,6 +46,22 @@ HTML_TEMPLATE = """
             min-height: 150px;
             font-family: monospace;
         }
+        .options-group {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .options-group label {
+            display: inline-block;
+            font-weight: normal;
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+        .options-group input[type="checkbox"] {
+            margin-right: 5px;
+        }
         button {
             background-color: #007bff;
             color: white;
@@ -102,6 +118,13 @@ HTML_TEMPLATE = """
 2001:db8::/32
 2001:db8:1::/48
 ">{{ user_input }}</textarea>
+
+            <div class="options-group">
+                <input type="checkbox" id="aggressive_mode" name="aggressive_mode" value="true" {% if aggressive_mode_checked %}checked{% endif %}>
+                <label for="aggressive_mode">Agresywna sumaryzacja (znajdź najmniejszy wspólny supernet)</label><br>
+                <span style="font-size: 0.85em; color: #666;">(Może obejmować puste przestrzenie między podanymi sieciami, zwracając jeden lub dwa bloki dla wszystkich wpisów.)</span>
+            </div>
+
             <button type="submit">Sumaryzuj</button>
         </form>
 
@@ -141,19 +164,18 @@ HTML_TEMPLATE = """
 </html>
 """
 
-def summarize_networks_logic(ip_networks_list):
+def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
     """
     Logika sumaryzacji adresów IP lub sieci w formacie CIDR.
     Funkcja zwraca listę zsumowanych sieci, listę błędów i listę ostrzeżeń.
     """
-    if not ip_networks_list:
-        return [], [], []
-
-    parsed_networks = []
+    summarized_results = []
     errors = []
     warnings = []
+    parsed_networks_ipv4 = []
+    parsed_networks_ipv6 = []
     
-    # Flaga do śledzenia, czy wprowadzono jakiekolwiek niepuste linie
+    # Flag to track if any non-empty lines were provided in input
     has_valid_input_lines = False
 
     for entry in ip_networks_list:
@@ -161,39 +183,74 @@ def summarize_networks_logic(ip_networks_list):
         if not entry:
             continue
         
-        has_valid_input_lines = True # Znaleziono niepustą linię
+        has_valid_input_lines = True # Found a non-empty line
 
         try:
             if '/' in entry:
-                # Jeśli zawiera '/', traktuj jako sieć CIDR
-                parsed_networks.append(ipaddress.ip_network(entry, strict=False))
+                # If it contains '/', treat as a CIDR network
+                network_obj = ipaddress.ip_network(entry, strict=False)
             else:
-                # Jeśli nie zawiera '/', traktuj jako pojedynczy adres IP (host)
+                # If it doesn't contain '/', treat as a single IP address (host)
                 ip_addr = ipaddress.ip_address(entry)
                 if ip_addr.version == 4:
-                    # Dla IPv4, dodaj /32
-                    parsed_networks.append(ipaddress.ip_network(str(ip_addr) + '/32', strict=False))
+                    # For IPv4, add /32
+                    network_obj = ipaddress.ip_network(str(ip_addr) + '/32', strict=False)
                 elif ip_addr.version == 6:
-                    # Dla IPv6, dodaj /128
-                    parsed_networks.append(ipaddress.ip_network(str(ip_addr) + '/128', strict=False))
+                    # For IPv6, add /128
+                    network_obj = ipaddress.ip_network(str(ip_addr) + '/128', strict=False)
+                else:
+                    warnings.append(f"Nieobsługiwana wersja IP: '{entry}'. Pomijam.")
+                    continue
+            
+            if network_obj.version == 4:
+                parsed_networks_ipv4.append(network_obj)
+            elif network_obj.version == 6:
+                parsed_networks_ipv6.append(network_obj)
+
         except ValueError:
             warnings.append(f"Nieprawidłowy format IP/sieci lub nieprawidłowy adres: '{entry}'. Pomijam.")
             continue
     
-    if not parsed_networks:
-        # Jeśli nie było żadnych prawidłowych wpisów do parsowania, ale input był
+    if not parsed_networks_ipv4 and not parsed_networks_ipv6:
+        # If input was not empty, but nothing could be parsed
         if has_valid_input_lines and not errors and not warnings:
             errors.append("Brak prawidłowych wpisów do sumaryzacji.")
         return [], errors, warnings
 
-    # WAŻNA ZMIANA: Posortuj listę przed sumaryzacją
-    # ipaddress.collapse_addresses działa najlepiej na posortowanych danych
-    parsed_networks.sort() 
+    if aggressive_mode_enabled:
+        # AGGRESSIVE SUMMARIZATION LOGIC
+        if parsed_networks_ipv4:
+            # Sort for consistency before common_network (not strictly required for common_network, but good practice)
+            parsed_networks_ipv4.sort() 
+            current_supernet_v4 = parsed_networks_ipv4[0]
+            for i in range(1, len(parsed_networks_ipv4)):
+                current_supernet_v4 = ipaddress.common_network(current_supernet_v4, parsed_networks_ipv4[i])
+            summarized_results.append(str(current_supernet_v4))
 
-    # Użycie ipaddress.collapse_addresses do sumaryzacji
-    summarized = list(ipaddress.collapse_addresses(parsed_networks))
+        if parsed_networks_ipv6:
+            # Sort for consistency
+            parsed_networks_ipv6.sort()
+            current_supernet_v6 = parsed_networks_ipv6[0]
+            for i in range(1, len(parsed_networks_ipv6)):
+                current_supernet_v6 = ipaddress.common_network(current_supernet_v6, parsed_networks_ipv6[i])
+            summarized_results.append(str(current_supernet_v6))
+
+    else:
+        # STANDARD SUMMARIZATION LOGIC (using collapse_addresses)
+        if parsed_networks_ipv4:
+            parsed_networks_ipv4.sort() # IMPORTANT: Ensure sorted for collapse_addresses
+            collapsed_v4 = list(ipaddress.collapse_addresses(parsed_networks_ipv4))
+            summarized_results.extend([str(s) for s in collapsed_v4])
+
+        if parsed_networks_ipv6:
+            parsed_networks_ipv6.sort() # IMPORTANT: Ensure sorted for collapse_addresses
+            collapsed_v6 = list(ipaddress.collapse_addresses(parsed_networks_ipv6))
+            summarized_results.extend([str(s) for s in collapsed_v6])
+
+    # Sort final results for consistent display (e.g., IPv4 before IPv6, then by value)
+    summarized_results.sort(key=ipaddress.ip_network)
     
-    return [str(s) for s in summarized], errors, warnings
+    return summarized_results, errors, warnings
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -201,21 +258,29 @@ def index():
     user_input = ""
     errors = []
     warnings = []
+    aggressive_mode_checked = False
 
     if request.method == 'POST':
         user_input = request.form['networks']
         networks_from_form = user_input.splitlines()
-        summarized_networks, errors, warnings = summarize_networks_logic(networks_from_form)
+        # Check if the 'aggressive_mode' checkbox was checked
+        aggressive_mode_checked = 'aggressive_mode' in request.form
+        
+        summarized_networks, errors, warnings = summarize_networks_logic(
+            networks_from_form, 
+            aggressive_mode_enabled=aggressive_mode_checked
+        )
 
     return render_template_string(HTML_TEMPLATE, 
                                   summarized_networks=summarized_networks,
                                   user_input=user_input,
                                   errors=errors,
-                                  warnings=warnings)
+                                  warnings=warnings,
+                                  aggressive_mode_checked=aggressive_mode_checked)
 
 if __name__ == '__main__':
-    # Uruchomienie serwera Flask
-    # 'host='0.0.0.0'' pozwala na dostęp z zewnątrz (np. z sieci lokalnej)
-    # 'port=int(os.environ.get('PORT', 5000))' pozwala na dynamiczne ustawienie portu przez hosting
-    # 'debug=True' jest dobre do rozwoju, ale ZAWSZE ustaw na False w środowisku produkcyjnym!
+    # Running the Flask server
+    # 'host='0.0.0.0'' allows access from outside (e.g., from local network)
+    # 'port=int(os.environ.get('PORT', 5000))' allows dynamic port setting by hosting provider
+    # 'debug=True' is good for development, but ALWAYS set to False in production!
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
