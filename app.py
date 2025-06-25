@@ -152,11 +152,16 @@ def summarize_networks_logic(ip_networks_list):
     parsed_networks = []
     errors = []
     warnings = []
+    
+    # Flaga do śledzenia, czy wprowadzono jakiekolwiek niepuste linie
+    has_valid_input_lines = False
 
     for entry in ip_networks_list:
         entry = entry.strip()
         if not entry:
             continue
+        
+        has_valid_input_lines = True # Znaleziono niepustą linię
 
         try:
             if '/' in entry:
@@ -176,10 +181,14 @@ def summarize_networks_logic(ip_networks_list):
             continue
     
     if not parsed_networks:
-        # Jeśli lista wejściowa nie jest pusta, ale nic nie udało się sparsować
-        if not errors and not warnings and any(entry.strip() for entry in ip_networks_list):
-             errors.append("Brak prawidłowych wpisów do sumaryzacji.")
+        # Jeśli nie było żadnych prawidłowych wpisów do parsowania, ale input był
+        if has_valid_input_lines and not errors and not warnings:
+            errors.append("Brak prawidłowych wpisów do sumaryzacji.")
         return [], errors, warnings
+
+    # WAŻNA ZMIANA: Posortuj listę przed sumaryzacją
+    # ipaddress.collapse_addresses działa najlepiej na posortowanych danych
+    parsed_networks.sort() 
 
     # Użycie ipaddress.collapse_addresses do sumaryzacji
     summarized = list(ipaddress.collapse_addresses(parsed_networks))
