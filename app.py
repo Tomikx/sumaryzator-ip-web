@@ -1,7 +1,7 @@
 import ipaddress
 import os
+import sys # Dodano import modułu sys
 from flask import Flask, request, render_template_string
-
 
 app = Flask(__name__)
 
@@ -98,6 +98,12 @@ HTML_TEMPLATE = """
             font-weight: bold;
             margin-top: 10px;
         }
+        .python-info { /* Nowy styl dla informacji o Pythonie */
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.8em;
+            color: #555;
+        }
         footer {
             text-align: center;
             margin-top: 30px;
@@ -157,6 +163,9 @@ HTML_TEMPLATE = """
         {% elif user_input and not errors %}
             <h2>Brak sieci do sumaryzacji lub wszystkie wpisy były nieprawidłowe.</h2>
         {% endif %}
+    </div>
+    <div class="python-info">
+        Wersja Pythona: {{ python_version_info }}
     </div>
     <footer>
         <p>Powered by Flask & Python ipaddress library</p>
@@ -243,9 +252,9 @@ def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
                     errors.append(f"Wewnętrzny błąd typu podczas agresywnej sumaryzacji IPv6: {e}")
         except Exception as e:
             # Ostateczne wyłapanie wszelkich innych błędów w trybie agresywnym
-            errors.append(f"Nieoczekiwany błąd w trybie agresywnej sumaryzacji: {e}. Sprawdź logi serwera, jeśli aplikacja działa w trybie debugowania. (Wymagany Python 3.9+)")
-            if app.debug: # Dodałem ten warunek, aby logować tylko w trybie debugowania
-                print(f"DEBUG: Wystąpił nieoczekiwany błąd w trybie agresywnym: {e} (Wymagany Python 3.9+)")
+            errors.append(f"Nieoczekiwany błąd w trybie agresywnej sumaryzacji: {e}. (Wymagany Python 3.9+)")
+            # Usunięto print() dla debugowania, ponieważ Render może nie przekierowywać łatwo printów do logów
+            # i zamiast tego może generować "Internal Server Error" dla nieprzechwyconych wyjątków.
 
 
     else:
@@ -273,6 +282,8 @@ def index():
     errors = []
     warnings = []
     aggressive_mode_checked = False
+    # Dodano pobieranie informacji o wersji Pythona
+    python_version_info = sys.version
 
     if request.method == 'POST':
         user_input = request.form['networks']
@@ -290,7 +301,8 @@ def index():
                                   user_input=user_input,
                                   errors=errors,
                                   warnings=warnings,
-                                  aggressive_mode_checked=aggressive_mode_checked)
+                                  aggressive_mode_checked=aggressive_mode_checked,
+                                  python_version_info=python_version_info) # Przekazanie do szablonu
 
 if __name__ == '__main__':
     # Running the Flask server
