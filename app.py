@@ -110,6 +110,19 @@ HTML_TEMPLATE = """
             font-size: 0.9em;
             color: #777;
         }
+        .debug-info { /* Nowy styl dla informacji debugowania */
+            background-color: #ffe0b2; /* Jasnopomarańczowy */
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border: 1px solid #ffcc80;
+            font-size: 0.85em;
+            text-align: left;
+        }
+        .debug-info h4 {
+            margin-top: 0;
+            color: #e65100; /* Ciemnopomarańczowy */
+        }
     </style>
 </head>
 <body>
@@ -164,8 +177,15 @@ HTML_TEMPLATE = """
             <h2>Brak sieci do sumaryzacji lub wszystkie wpisy były nieprawidłowe.</h2>
         {% endif %}
     </div>
-    <div class="python-info">
-        Wersja Pythona: {{ python_version_info }}
+    <div class="debug-info">
+        <h4>Informacje diagnostyczne:</h4>
+        <p>Wersja Pythona: <code>{{ python_version_info }}</code></p>
+        <p>Czy `ipaddress.common_network` istnieje?: <code>{{ common_network_exists }}</code></p>
+        <p>Ścieżka do modułu `ipaddress`: <code>{{ ipaddress_file_path }}</code></p>
+        <p>Wersja modułu `ipaddress` (jeśli dostępna): <code>{{ ipaddress_version }}</code></p>
+        <p>Zawartość `sys.modules['ipaddress']`: <code>{{ sys_modules_ipaddress }}</code></p>
+        <p><code>sys.path</code>:</p>
+        <pre>{{ sys_path_info }}</pre>
     </div>
     <footer>
         <p>Powered by Flask & Python ipaddress library</p>
@@ -232,6 +252,11 @@ def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
         # common_network(*iterable) jest bezpieczne nawet dla listy z 1 elementem.
         # Wymaga Pythona 3.9 lub nowszego dla funkcji common_network.
         try: # Dodatkowy, ogólny blok try-except dla całej agresywnej logiki
+            # Sprawdzamy czy common_network istnieje przed wywołaniem
+            if not hasattr(ipaddress, 'common_network'):
+                errors.append("Błąd: Funkcja 'ipaddress.common_network' nie jest dostępna w załadowanym module 'ipaddress'. Upewnij się, że używasz Pythona 3.9+ i że nie ma konfliktów modułów.")
+                return [], errors, warnings
+
             if parsed_networks_ipv4:
                 try:
                     supernet_v4 = ipaddress.common_network(*parsed_networks_ipv4)
@@ -253,8 +278,6 @@ def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
         except Exception as e:
             # Ostateczne wyłapanie wszelkich innych błędów w trybie agresywnym
             errors.append(f"Nieoczekiwany błąd w trybie agresywnej sumaryzacji: {e}. (Wymagany Python 3.9+)")
-            # Usunięto print() dla debugowania, ponieważ Render może nie przekierowywać łatwo printów do logów
-            # i zamiast tego może generować "Internal Server Error" dla nieprzechwyconych wyjątków.
 
 
     else:
@@ -282,8 +305,26 @@ def index():
     errors = []
     warnings = []
     aggressive_mode_checked = False
+    
     # Dodano pobieranie informacji o wersji Pythona
     python_version_info = sys.version
+    
+    # Dodano sprawdzanie istnienia common_network
+    common_network_exists = hasattr(ipaddress, 'common_network')
+
+    # Dodano pobieranie ścieżki do modułu ipaddress
+    ipaddress_file_path = getattr(ipaddress, '__file__', 'Nieznana ścieżka (moduł ipaddress nie posiada atrybutu __file__)')
+    
+    # Dodano pobieranie wersji modułu ipaddress (jeśli dostępna)
+    ipaddress_version = getattr(ipaddress, '__version__', 'Nieokreślona')
+
+    # Dodano pobieranie zawartości sys.modules['ipaddress']
+    # Używamy repr() aby zobaczyć pełną reprezentację obiektu
+    sys_modules_ipaddress = repr(sys.modules.get('ipaddress', 'Moduł ipaddress nie znaleziono w sys.modules'))
+    
+    # Dodano pobieranie informacji o sys.path
+    sys_path_info = "\n".join(sys.path)
+
 
     if request.method == 'POST':
         user_input = request.form['networks']
@@ -302,7 +343,12 @@ def index():
                                   errors=errors,
                                   warnings=warnings,
                                   aggressive_mode_checked=aggressive_mode_checked,
-                                  python_version_info=python_version_info) # Przekazanie do szablonu
+                                  python_version_info=python_version_info,
+                                  common_network_exists=common_network_exists, # Nowa zmienna
+                                  ipaddress_file_path=ipaddress_file_path,
+                                  ipaddress_version=ipaddress_version, # Nowa zmienna
+                                  sys_modules_ipaddress=sys_modules_ipaddress, # Nowa zmienna
+                                  sys_path_info=sys_path_info)
 
 if __name__ == '__main__':
     # Running the Flask server
