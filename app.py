@@ -1,6 +1,28 @@
 import ipaddress
 import os
 import sys
+import importlib # Dodano import modułu importlib
+
+# --- WAŻNA KOREKTA ŁADOWANIA MODUŁU IPADDRESS ---
+# Problem: Mimo Pythona 3.9+, ładuje się zewnętrzny pakiet 'ipaddress' (wersja 1.0)
+#          zamiast wbudowanego modułu, co powoduje brak common_network.
+# Rozwiązanie: Sprawdź, czy załadowany moduł to problematyczny backport.
+#              Jeśli tak, usuń go z sys.modules i spróbuj załadować wbudowany.
+if hasattr(ipaddress, '__version__') and ipaddress.__version__ == '1.0':
+    print("WARNING: Detected problematic 'ipaddress' module version 1.0. Attempting to reload built-in module.")
+    try:
+        # Usuń problematyczny moduł z bufora sys.modules
+        if 'ipaddress' in sys.modules:
+            del sys.modules['ipaddress']
+        # Załaduj ponownie moduł ipaddress
+        ipaddress = importlib.import_module('ipaddress')
+        print("INFO: Successfully reloaded 'ipaddress' module.")
+    except Exception as e:
+        print(f"ERROR: Failed to reload 'ipaddress' module: {e}")
+        # Jeśli ponowne załadowanie się nie powiedzie, to dalej będziemy mieć problem.
+# --- KONIEC KOREKTY ---
+
+
 from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
@@ -252,9 +274,9 @@ def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
         # common_network(*iterable) is safe even for a list with 1 element.
         # Requires Python 3.9+ for the common_network function.
         try: # Added general try-except block for aggressive logic
-            # Check if common_network exists before calling
+            # Sprawdzamy czy common_network istnieje przed wywołaniem, po ewentualnym przeładowaniu modułu
             if not hasattr(ipaddress, 'common_network'):
-                errors.append("Error: 'ipaddress.common_network' function is not available in the loaded 'ipaddress' module. Ensure you are using Python 3.9+ and there are no module conflicts.")
+                errors.append("Error: 'ipaddress.common_network' function is not available in the loaded 'ipaddress' module. Despite Python 3.9+, a module conflict persists. Contact support or try a different environment.")
                 # We return here as this is a critical error for aggressive mode
                 return [], errors, warnings
 
@@ -278,7 +300,7 @@ def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
                     errors.append(f"Internal type error during IPv6 aggressive summarization: {e}")
         except Exception as e:
             # Final catch for any other unexpected errors in aggressive mode
-            errors.append(f"Unexpected error in aggressive summarization mode: {e}. (Requires Python 3.9+)")
+            errors.append(f"Unexpected error in aggressive summarization mode: {e}.")
 
 
     else:
