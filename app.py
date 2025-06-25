@@ -1,11 +1,11 @@
 import ipaddress
 import os
-import sys # Dodano import modułu sys
+import sys
 from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
 
-# Szablon HTML dla interfejsu użytkownika
+# HTML template for the user interface
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="pl">
@@ -98,7 +98,7 @@ HTML_TEMPLATE = """
             font-weight: bold;
             margin-top: 10px;
         }
-        .python-info { /* Nowy styl dla informacji o Pythonie */
+        .python-info { /* Style for Python version info */
             text-align: center;
             margin-top: 10px;
             font-size: 0.8em;
@@ -110,8 +110,8 @@ HTML_TEMPLATE = """
             font-size: 0.9em;
             color: #777;
         }
-        .debug-info { /* Nowy styl dla informacji debugowania */
-            background-color: #ffe0b2; /* Jasnopomarańczowy */
+        .debug-info { /* Style for debug info */
+            background-color: #ffe0b2; /* Light orange */
             padding: 15px;
             border-radius: 8px;
             margin-top: 20px;
@@ -121,7 +121,7 @@ HTML_TEMPLATE = """
         }
         .debug-info h4 {
             margin-top: 0;
-            color: #e65100; /* Ciemnopomarańczowy */
+            color: #e65100; /* Dark orange */
         }
     </style>
 </head>
@@ -196,8 +196,8 @@ HTML_TEMPLATE = """
 
 def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
     """
-    Logika sumaryzacji adresów IP lub sieci w formacie CIDR.
-    Funkcja zwraca listę zsumowanych sieci, listę błędów i listę ostrzeżeń.
+    Logic for summarizing IP addresses or networks in CIDR format.
+    The function returns a list of summarized networks, a list of errors, and a list of warnings.
     """
     summarized_results = []
     errors = []
@@ -229,7 +229,7 @@ def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
                     # For IPv6, add /128
                     network_obj = ipaddress.ip_network(str(ip_addr) + '/128', strict=False)
                 else:
-                    warnings.append(f"Nieobsługiwana wersja IP: '{entry}'. Pomijam.")
+                    warnings.append(f"Unsupported IP version: '{entry}'. Skipping.")
                     continue
             
             if network_obj.version == 4:
@@ -238,23 +238,24 @@ def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
                 parsed_networks_ipv6.append(network_obj)
 
         except ValueError:
-            warnings.append(f"Nieprawidłowy format IP/sieci lub nieprawidłowy adres: '{entry}'. Pomijam.")
+            warnings.append(f"Invalid IP/network format or invalid address: '{entry}'. Skipping.")
             continue
     
     if not parsed_networks_ipv4 and not parsed_networks_ipv6:
         # If input was not empty, but nothing could be parsed
         if has_valid_input_lines and not errors and not warnings:
-            errors.append("Brak prawidłowych wpisów do sumaryzacji.")
+            errors.append("No valid entries for summarization.")
         return [], errors, warnings
 
     if aggressive_mode_enabled:
         # AGGRESSIVE SUMMARIZATION LOGIC
-        # common_network(*iterable) jest bezpieczne nawet dla listy z 1 elementem.
-        # Wymaga Pythona 3.9 lub nowszego dla funkcji common_network.
-        try: # Dodatkowy, ogólny blok try-except dla całej agresywnej logiki
-            # Sprawdzamy czy common_network istnieje przed wywołaniem
+        # common_network(*iterable) is safe even for a list with 1 element.
+        # Requires Python 3.9+ for the common_network function.
+        try: # Added general try-except block for aggressive logic
+            # Check if common_network exists before calling
             if not hasattr(ipaddress, 'common_network'):
-                errors.append("Błąd: Funkcja 'ipaddress.common_network' nie jest dostępna w załadowanym module 'ipaddress'. Upewnij się, że używasz Pythona 3.9+ i że nie ma konfliktów modułów.")
+                errors.append("Error: 'ipaddress.common_network' function is not available in the loaded 'ipaddress' module. Ensure you are using Python 3.9+ and there are no module conflicts.")
+                # We return here as this is a critical error for aggressive mode
                 return [], errors, warnings
 
             if parsed_networks_ipv4:
@@ -262,9 +263,9 @@ def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
                     supernet_v4 = ipaddress.common_network(*parsed_networks_ipv4)
                     summarized_results.append(str(supernet_v4))
                 except ValueError as e:
-                    errors.append(f"Błąd agresywnej sumaryzacji IPv4 (common_network): {e}. Upewnij się, że wszystkie adresy są prawidłowe i należą do tej samej wersji IP.")
+                    errors.append(f"IPv4 aggressive summarization error (common_network): {e}. Ensure all addresses are valid and belong to the same IP version.")
                 except TypeError as e:
-                    errors.append(f"Wewnętrzny błąd typu podczas agresywnej sumaryzacji IPv4: {e}")
+                    errors.append(f"Internal type error during IPv4 aggressive summarization: {e}")
 
 
             if parsed_networks_ipv6:
@@ -272,12 +273,12 @@ def summarize_networks_logic(ip_networks_list, aggressive_mode_enabled=False):
                     supernet_v6 = ipaddress.common_network(*parsed_networks_ipv6)
                     summarized_results.append(str(supernet_v6))
                 except ValueError as e:
-                    errors.append(f"Błąd agresywnej sumaryzacji IPv6 (common_network): {e}. Upewnij się, że wszystkie adresy są prawidłowe i należą do tej samej wersji IP.")
+                    errors.append(f"IPv6 aggressive summarization error (common_network): {e}. Ensure all addresses are valid and belong to the same IP version.")
                 except TypeError as e:
-                    errors.append(f"Wewnętrzny błąd typu podczas agresywnej sumaryzacji IPv6: {e}")
+                    errors.append(f"Internal type error during IPv6 aggressive summarization: {e}")
         except Exception as e:
-            # Ostateczne wyłapanie wszelkich innych błędów w trybie agresywnym
-            errors.append(f"Nieoczekiwany błąd w trybie agresywnej sumaryzacji: {e}. (Wymagany Python 3.9+)")
+            # Final catch for any other unexpected errors in aggressive mode
+            errors.append(f"Unexpected error in aggressive summarization mode: {e}. (Requires Python 3.9+)")
 
 
     else:
@@ -306,23 +307,24 @@ def index():
     warnings = []
     aggressive_mode_checked = False
     
-    # Dodano pobieranie informacji o wersji Pythona
+    # Get Python version information
     python_version_info = sys.version
     
-    # Dodano sprawdzanie istnienia common_network
+    # Check if common_network attribute exists in ipaddress module
     common_network_exists = hasattr(ipaddress, 'common_network')
 
-    # Dodano pobieranie ścieżki do modułu ipaddress
-    ipaddress_file_path = getattr(ipaddress, '__file__', 'Nieznana ścieżka (moduł ipaddress nie posiada atrybutu __file__)')
+    # Get the file path of the loaded ipaddress module
+    ipaddress_file_path = getattr(ipaddress, '__file__', 'Unknown path (ipaddress module has no __file__ attribute)')
     
-    # Dodano pobieranie wersji modułu ipaddress (jeśli dostępna)
-    ipaddress_version = getattr(ipaddress, '__version__', 'Nieokreślona')
+    # Get the version of the ipaddress module (if available)
+    # Standard library modules usually don't have __version__
+    ipaddress_version = getattr(ipaddress, '__version__', 'Undefined')
 
-    # Dodano pobieranie zawartości sys.modules['ipaddress']
-    # Używamy repr() aby zobaczyć pełną reprezentację obiektu
-    sys_modules_ipaddress = repr(sys.modules.get('ipaddress', 'Moduł ipaddress nie znaleziono w sys.modules'))
+    # Get the representation of the ipaddress module from sys.modules
+    # Use repr() to see the full object representation
+    sys_modules_ipaddress = repr(sys.modules.get('ipaddress', 'ipaddress module not found in sys.modules'))
     
-    # Dodano pobieranie informacji o sys.path
+    # Get sys.path information
     sys_path_info = "\n".join(sys.path)
 
 
@@ -344,10 +346,10 @@ def index():
                                   warnings=warnings,
                                   aggressive_mode_checked=aggressive_mode_checked,
                                   python_version_info=python_version_info,
-                                  common_network_exists=common_network_exists, # Nowa zmienna
+                                  common_network_exists=common_network_exists,
                                   ipaddress_file_path=ipaddress_file_path,
-                                  ipaddress_version=ipaddress_version, # Nowa zmienna
-                                  sys_modules_ipaddress=sys_modules_ipaddress, # Nowa zmienna
+                                  ipaddress_version=ipaddress_version,
+                                  sys_modules_ipaddress=sys_modules_ipaddress,
                                   sys_path_info=sys_path_info)
 
 if __name__ == '__main__':
